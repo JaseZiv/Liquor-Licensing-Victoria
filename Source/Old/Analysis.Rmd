@@ -1,0 +1,385 @@
+---
+title: "Assignment 3"
+output: html_document
+---
+
+```{r}
+source("Capstone/Libraries/Load_InstallLibraries.r")
+library(ggmap)
+library(scales)
+```
+
+
+```{r}
+liquor_data <- readRDS("Capstone/Data/Analysis/AssignmentData/liquor_data_deduped.rds")
+
+glimpse(liquor_data)
+
+unique_liquor_data <- sapply(liquor_data, n_distinct)
+
+# what type of licences are there?
+liquor_data %>%
+  count(Category) %>%
+  arrange(desc(n))
+
+#see Notes_on_Data_Selection.md re the following exclusions
+liquor_data <- liquor_data %>%
+  filter(Category != "Pre-retail Licence",
+         Category != "Wine and Beer Producer's Licence")
+
+```
+
+
+
+There appears to be duplicates in the data - at least at the address level. The same venue can have multiple licenses. Need to remove these for our summarised data purposes later (otherwise double counting will occur for number of liquor licenses within suburbs).
+```{r}
+
+liquor_data %>%
+  mutate(Longitude = as.numeric(Longitude),
+         Latitude = as.numeric(Latitude)) %>%
+  filter(Latitude != 0) %>%
+  ggplot(aes(x=Longitude, y=Latitude)) +
+  geom_point(alpha = 0.5, shape = 21, size = 1, fill = "steelblue") +
+  theme_bw() +
+  ggtitle("Where are the liquor licences in Victoria?")
+
+```
+
+
+
+```{r}
+# create a df of the number of liquor licences per suburb
+liquor_by_suburb <- liquor_data %>%
+  group_by(Postcode, Suburb) %>%
+  filter(!is.na(Postcode), Postcode >= 3000) %>%
+  summarise(liq_lic_count = n()) %>% ungroup() %>% 
+  mutate(Postcode = as.numeric(Postcode)) %>%
+  group_by(Postcode) %>%
+  mutate(Suburb_name = paste(Suburb, collapse = "|")) %>%
+  group_by(Postcode, Suburb_name) %>%
+  summarise(liquor_license_count = sum(liq_lic_count)) %>%
+  ungroup()
+
+
+ggplot(data = liquor_by_suburb, aes(x = liquor_license_count)) +
+  geom_density(alpha = 0.5)
+
+
+ggplot(data = filter(liquor_by_suburb, Postcode != 3000), aes(x = liquor_license_count)) +
+  geom_density(alpha = 0.5, fill = "orange") +
+  theme_bw() +
+  labs(title = "Distribution of the number of liquor licenses", x = "Number of licenses", y= "")
+
+# highest liquor license suburbs
+liquor_by_suburb %>%
+  arrange(desc(liquor_license_count)) %>%
+  head(n=20) %>%
+  ggplot(aes(x= reorder(as.character(Postcode), liquor_license_count), y = liquor_license_count)) +
+  geom_bar(stat = "identity") +
+  coord_flip()
+
+```
+
+
+```{r}
+##########################################
+#---------- Read in Crime data ----------#
+##########################################
+
+# read in crime data
+crime_data <- readRDS("Capstone/Data/Analysis/AssignmentData/crime_data.rds")
+
+head(crime_data)
+
+print(colSums(is.na(crime_data)))
+
+# How has crime changed over time?
+crime_data %>%
+  group_by(YearendingMarch) %>%
+  summarise(crime_count = sum(IncidentsRecorded)) %>%
+  ggplot(aes(x= YearendingMarch, y= crime_count)) +
+  geom_line(col = "midnightblue", size = 1) +
+  geom_point() +
+  scale_y_continuous(labels = comma, limits = c(0,420000)) +
+  theme_bw() +
+  labs(title = "How have criminal incidents changed over time?", x= "Year Ending March", y= "")
+
+
+# How has crime changed over time?
+crime_data %>%
+  group_by(YearendingMarch, OffenceDivision) %>%
+  summarise(crime_count = sum(IncidentsRecorded)) %>%
+  ggplot(aes(x= YearendingMarch, y= crime_count, colour = OffenceDivision)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = comma) +
+  theme_bw() +
+  labs(title = "How have criminal incidents changed over time?", x= "Year Ending March", y= "") +
+  facet_wrap(~ OffenceDivision, scales = "free_y", ncol = 2) +
+  theme(legend.position = "none")
+
+
+```
+
+```{r}
+# get the average lat and lon for each postcode
+geo_coords <- crime_data %>%
+  group_by(Postcode) %>%
+  summarise(Latitude = mean(Latitude),
+            Longitude = mean(Longitude)) %>% ungroup()
+
+#-----------------------------------------------------
+# From now, analysis all for 2018 crime data
+#-----------------------------------------------------
+
+# summarise crime data by suburb and crime type
+
+# count the total incidents by suburb
+crime_suburb_counts <- crime_data %>%
+  filter(YearendingMarch == 2018) %>%
+  group_by(Postcode, OffenceDivision) %>%
+  summarise(total_incidents = sum(IncidentsRecorded)) %>% ungroup()
+
+# manipulate data so that all possible suburb names for each postcode are listed in the one variable and don't cause double ups
+crime_postcode_names <- crime_data %>%
+  group_by(Postcode, Suburb_TownName) %>%
+  summarise(total_incidents = sum(IncidentsRecorded)) %>%
+  group_by(Postcode) %>%
+  mutate(Suburb_name = paste(Suburb_TownName, collapse = "|")) %>%
+  count(Postcode, Suburb_name) %>%
+  select(-n)
+
+# now join the possible suburb names back top the crime count df
+crime_suburb_counts <- crime_suburb_counts %>%
+  left_join(crime_postcode_names, by = "Postcode") %>%
+  left_join(geo_coords, by = "Postcode")
+```
+
+```{r}
+########################################################
+#---------- Summarised crime and liquor data ----------#
+########################################################
+
+# join the crime and liquor license counts
+crime_and_liquor <- crime_suburb_counts %>%
+  left_join(liquor_by_suburb, by = "Postcode")
+
+print(colSums(is.na(crime_and_liquor)))
+
+# it appears that these are missing because there are no venues in these suburbs. Will recode the NAs to 0
+crime_and_liquor %>%
+  group_by(Postcode) %>%
+  filter(is.na(liquor_license_count))
+
+
+crime_and_liquor$liquor_license_count[is.na(crime_and_liquor$liquor_license_count)] <- 0
+
+```
+
+
+```{r, fig.width=8, warning=FALSE, message=FALSE}
+mapping_df <- crime_and_liquor %>%
+  filter(Postcode != 3000) %>%
+  group_by(Longitude, Latitude) %>%
+  summarise(NumIncidents = sum(total_incidents))
+
+
+
+crime_and_liquor %>%
+   filter(Postcode != 3000) %>%
+   group_by(Longitude, Latitude) %>%
+   summarise(NumIncidents = sum(total_incidents)) %>%
+   ggplot(aes(x= Longitude, y= Latitude)) +
+   geom_point(aes(colour = NumIncidents, size = NumIncidents)) +
+   scale_colour_gradient(low = "green", high = "red") +
+  theme_bw()
+
+
+
+map_toner <- get_map(location = c(140,-39.2,150,-34), zoom = 8, source = "stamen", maptype = "toner")
+
+ggmap(map_toner) + 
+  geom_jitter(data = mapping_df, aes(x=Longitude, y=Latitude, size = NumIncidents), color = "black", fill = "orange", shape = 21) +
+  theme(axis.title = element_blank(), axis.text = element_blank()) +
+  ggtitle("Where are the crime hotspots") +
+  theme(plot.title = element_text(size = 30))
+
+ggsave(filename = "Capstone/Plots/CrimeHotspotMap.png")
+
+
+#### or with colour gradient #####
+ggmap(map_toner) + 
+  geom_jitter(data = mapping_df, aes(x=Longitude, y=Latitude, size = NumIncidents, colour = NumIncidents)) +
+  theme(axis.title = element_blank(), axis.text = element_blank()) +
+  ggtitle("Where are the crime hotspots") +
+  theme(plot.title = element_text(size = 30)) +
+  scale_colour_gradient(low = "green", high = "red")
+
+ggsave(filename = "Capstone/Plots/CrimeHotspotMap_Gradient.png")
+
+```
+
+
+
+```{r}
+crime_and_liquor %>%
+  group_by(Postcode) %>%
+  summarise(liquor_license_count = median(liquor_license_count), total_incidents = sum(total_incidents)) %>%
+  ggplot(aes(x=liquor_license_count, y= total_incidents)) + 
+  geom_point() +
+  labs(title = "Number of liquor licences and criminal incidents", 
+       subtitle = "Is there a relationship between crime and liquor licenses?",
+       x = "Liquor Licenses", y = "Criminal Incidents")
+
+
+
+# remove the outlier, which is Melbourne
+crime_and_liquor %>%
+  group_by(Postcode) %>%
+  summarise(liquor_license_count = sum(liquor_license_count), total_incidents = sum(total_incidents)) %>%
+  filter(Postcode != 3000) %>%
+  ggplot(aes(x=liquor_license_count, y= total_incidents)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  labs(title = "Number of liquor licences and criminal incidents", 
+       subtitle = "Is there a relationship between crime and liquor licenses?",
+       x = "Liquor Licenses", y = "Criminal Incidents") 
+```
+
+
+
+```{r}
+
+test <- crime_and_liquor %>%
+  spread(key = OffenceDivision, value = total_incidents)
+
+test[is.na(test)] <- 0
+
+print(colSums(is.na(test)))
+
+
+test %>%
+  select(-Postcode, -Suburb_name.x, -Suburb_name.y) %>%
+  as.matrix() %>%
+  cor(method = "spearman") %>%
+  corrplot::corrplot(tl.srt = 45, type = "lower")
+
+```
+
+
+```{r}
+missing_latlon <- liquor_data_deduped %>%
+  filter(is.na(Longitude)) %>%
+  mutate(full_address = paste(Address, Suburb, Postcode, sep = ", "))
+
+
+
+address <- missing_latlon$full_address[10]
+
+a <- geocode(address)
+
+
+result <- do.call(rbind,
+                  lapply(1:nrow(missing_latlon),
+                         function(i) geocode(address[i])))
+
+result <- do.call(rbind,
+                  lapply(1:length(address),
+                         function(i) google_geocode(address[i])))
+
+
+
+
+
+
+
+
+
+
+# Initialize the data frame
+geocoded <- data.frame(stringsAsFactors = FALSE)
+
+# Loop through the addresses to get the latitude and longitude of each address and add it to the
+# origAddress data frame in new columns lat and lon
+for(i in 1:length(address)) {
+  # Print("Working...")
+  result <- google_geocode(address = address[i], key = key, simplify = TRUE)
+  cleaned_result[i] <- geocode_coordinates(result)
+}
+
+
+missing_latlon$lon[i] <- as.numeric(result[1])
+  missing_latlon$lat[i] <- as.numeric(result[2])
+  missing_latlon$geoAddress[i] <- as.character(result[3])
+
+
+library(googleway)
+key <- "AIzaSyCkvxRakBzHEimUYLlGswAD_RR9y9qwVvc"
+set_key(key = key)
+
+c <- google_geocode(address = address[1], key = key, simplify = TRUE)
+d <- geocode_coordinates(c)
+
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
