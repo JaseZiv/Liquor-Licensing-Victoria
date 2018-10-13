@@ -18,7 +18,7 @@ It is hoped this paper will potentially assist town planners in the awarding of 
 ### References:
 
 - ABS, 2017. LGA Summary Statistics. [Online]
-Available at: http://www.abs.gov.au/ausstats/subscriber.nsf/log?openagent&32350ds0011_lga_summary_statistic s_2016.xls&3235.0&Data%20Cubes&FB9641CA19F9EDD4CA2581870037A221&0&2016&28.0 8.2017&Latest
+Available at: http://www.abs.gov.au/ausstats/subscriber.nsf/log?openagent&32350ds0011_lga_summary_statistics_2016.xls&3235.0&Data%20Cubes&FB9641CA19F9EDD4CA2581870037A221&0&2016&28.0 8.2017&Latest
 
 - [Accessed 28 September 2019].
 Anon., n.d. Data.Vic. [Online]
@@ -31,7 +31,7 @@ Available at: https://www.data.vic.gov.au/data/dataset/victorian-liquor-licences
 - Grolemund, G. & Wickham, H., 2017. R for Data Science. 1 ed. s.l.:O'Reilly.
 
 - Heffernan, M., 2018. The Age. [Online]
-Available at: https://www.theage.com.au/national/victoria/end-of-the-dry-melbourne-s-only- alcohol-free-zone-now-teems-with-licensed-venues-20180209-p4yzue.html
+Available at: https://www.theage.com.au/national/victoria/end-of-the-dry-melbourne-s-only-alcohol-free-zone-now-teems-with-licensed-venues-20180209-p4yzue.html
 [Accessed 1 October 2018].
 
 - VCGLR, 2018. Data.vic.gov. [Online]
