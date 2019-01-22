@@ -15,6 +15,7 @@ It can be seen that Melbourne the suburb has by far the highest number of licenc
 
 It is hoped this paper will potentially assist town planners in the awarding of future licences, while also forming the basis of any future analyses to model the effects that liquor licensing has on crime rates in the state.
 
+
 ### References:
 
 - ABS, 2017. LGA Summary Statistics. [Online]
